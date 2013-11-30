@@ -14,6 +14,6 @@ ruuvitracker_tester:
           alias: tilt
         - pin: 3
           alias: pan
-    servo_input_pins: # pins passed to ARDUBUS_SERVO_INPUTS
+    pulse_input_pins: # pins passed to ARDUBUS_PULSE_INPUTS
         - pin: 6
           alias: rt_pb0
