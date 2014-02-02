@@ -11,9 +11,6 @@ from scpi.devices import hp6632b
 from dbushelpers.call_cached import call_cached as dbus_call_cached
 import time
 
-from threading import Lock
-mutex = Lock()
-
 class rt_testcase(object):
     def __init__(self, *args, **kwargs):
         super(rt_testcase, self).__init__(*args, **kwargs)
@@ -114,26 +111,26 @@ class rt_testcase(object):
 
     def pulse_received(self, alias, usec, sender):
         """This callback handles counting of the pulse-trains from pb0"""
+        print " *** got %d from '%s' *** " % (usec, alias)
         if alias != 'rt_pb0': # in we get signals from other aliases...
             return
-        try:
-            mutex.acquire()
-            if (    usec > 4000
-                and not self._active_pulse_train):
-                # new train
-                self.pulse_trains.append([])
-                self._active_pulse_train = True
-            
-            # Always append the received value
-            self.pulse_trains[-1].append(usec)
-    
-            if (    usec > 4000
-                and self._active_pulse_train):
-                # end of train
-                self._active_pulse_train = False
-                self.sync_received(len(self.pulse_trains[-1])-2)
-        finally:
-            mutex.release()
+
+        if (    usec > 4000
+            and not self._active_pulse_train):
+            # new train
+            self.pulse_trains.append([])
+            self._active_pulse_train = True
+            return
+
+        if (    usec > 4000
+            and self._active_pulse_train):
+            # end of train
+            self._active_pulse_train = False
+            self.sync_received(len(self.pulse_trains[-1]))
+            return
+
+        # For shorter values append to the sync train
+        self.pulse_trains[-1].append(usec)
 
     def sync_received(self, short_pulse_count):
         """Callback, you should override this to handle the syncs your tests need"""
