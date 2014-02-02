@@ -3,4 +3,4 @@
 from rt_testcase import rt_testcase
 
 c = rt_testcase()
-
+c.get_serialport()

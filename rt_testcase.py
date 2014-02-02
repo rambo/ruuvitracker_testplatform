@@ -5,18 +5,25 @@ import gobject
 import dbus
 import dbus.service
 import dbus.mainloop.glib
+dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
 from exceptions import NotImplementedError
 from scpi.devices import hp6632b
 from dbushelpers.call_cached import call_cached as dbus_call_cached
 import time
 
+from threading import Lock
+mutex = Lock()
+
 class rt_testcase(object):
     def __init__(self, *args, **kwargs):
         super(rt_testcase, self).__init__(*args, **kwargs)
-        dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
         self.bus = dbus.SessionBus()
         self.hp6632b = hp6632b.rs232('/dev/ttyUSB0')
         self.arduino_path = "/fi/hacklab/ardubus/ruuvitracker_tester"
+        # Currently our only input is the pulse so the method name is apt even though we trap all alias signals (also dio_change:s)
+        self.bus.add_signal_receiver(self.pulse_received, dbus_interface = "fi.hacklab.ardubus", signal_name = "alias_change", path=self.arduino_path)
+        self.pulse_trains = []
+        self._active_pulse_train = False
 
         # Finish by restoring a known state
         self.set_defaut_state()
@@ -35,6 +42,8 @@ class rt_testcase(object):
         self.set_tilt(62)
         time.sleep(0.700) # Give the servos time to actually move to position
         self.enable_servos(False) # The servos *will* jitter, in some angles more than others, disabling them prevents this
+        self.pulse_trains = []
+        self._active_pulse_train = False
 
     def power_down(self):
         """Cuts power from the module, both USB and hp6632b"""
@@ -102,6 +111,35 @@ class rt_testcase(object):
         self.enable_usb(True)
         # TODO: Make sure the serialport actually shows up on device tree
         # TODO: Find out which /dev/ttyACM it got bound to and return that as string
+
+    def pulse_received(self, alias, usec, sender):
+        """This callback handles counting of the pulse-trains from pb0"""
+        if alias != 'rt_pb0': # in we get signals from other aliases...
+            return
+        try:
+            mutex.acquire()
+            if (    usec > 4000
+                and not self._active_pulse_train):
+                # new train
+                self.pulse_trains.append([])
+                self._active_pulse_train = True
+            
+            # Always append the received value
+            self.pulse_trains[-1].append(usec)
+    
+            if (    usec > 4000
+                and self._active_pulse_train):
+                # end of train
+                self._active_pulse_train = False
+                self.sync_received(len(self.pulse_trains[-1])-2)
+        finally:
+            mutex.release()
+
+    def sync_received(self, short_pulse_count):
+        """Callback, you should override this to handle the syncs your tests need"""
+        print " *** Got sync of %d pulses ***" % short_pulse_count
+        print " *** self.pulse_trains = %s ***" % repr(self.pulse_trains)
+        pass
 
     def run(self):
         """The actual test, must call run_eventloop and must be event-oriented for timing long-running events"""
