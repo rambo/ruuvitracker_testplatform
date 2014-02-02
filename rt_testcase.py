@@ -45,7 +45,7 @@ class rt_testcase(object):
         """Shorthand for enabling output on the hp6632b"""
         self.hp6632b.set_output(True)
 
-    def set_power(self, millivolts, milliamps)
+    def set_power(self, millivolts, milliamps):
         """Sets the "battery" to given voltage + current AND enables output on the hp6632b"""
         self.hp6632b.set_voltage(millivolts)
         self.hp6632b.set_current(milliamps)
@@ -84,6 +84,23 @@ class rt_testcase(object):
             time.sleep(0.100)
             dbus_call_cached(self.arduino_path, 'set_alias', 'rt_boot0', False)
 
+    def get_bootloader(self):
+        """Shorthand for rebooting the STM32 to bootloader and cycling USB"""
+        self.enable_usb(False)
+        self.reset_stm32(True)
+        # Give the controller time to wake up
+        time.sleep(0.100)
+        self.enable_usb(True)
+        # TODO: Make sure the bootloader actually shows up on device tree
+
+    def get_serialport(self):
+        """Shorthand for rebooting the STM32 and cycling USB"""
+        self.enable_usb(False)
+        self.reset_stm32()
+        # Give the controller time to wake up
+        time.sleep(0.100)
+        self.enable_usb(True)
+        # TODO: Make sure the serialport actually shows up on device tree
 
     def run(self):
         """The actual test, must call run_eventloop and must be event-oriented for timing long-running events"""
