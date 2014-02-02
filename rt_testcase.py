@@ -147,7 +147,7 @@ class rt_testcase(object):
             suffix = os.path.basename(__file__) # TODO: better automagic ?
         filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'logs', "%s_%s" % (time.strftime("%Y-%m-%d_%H%M"), suffix))
         # Open buffered file stream
-        self.log_handle = io.open(filename, mode='wt')
+        self.log_handle = io.open(filename, mode='wb')
         # Make it CSV
         self.logger = csv.writer(self.log_handle)
         # And write the header
@@ -156,7 +156,7 @@ class rt_testcase(object):
     def log_data(self, *args):
         if not self.logger:
             self.open_logfile()
-        row = [datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")] + args
+        row = [ datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f") ] + list(args)
         self.logger.writerow(row)
 
     def log_voltage_et_current(self):
