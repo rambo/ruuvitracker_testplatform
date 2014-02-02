@@ -99,7 +99,7 @@ class rt_testcase(object):
     def get_bootloader(self):
         """Shorthand for rebooting the STM32 to bootloader and cycling USB"""
         self.enable_usb(False)
-        self.power_up()
+        self.set_power(4100, 50) # Just in case something had readjusted the values
         self.reset_stm32(True)
         # Give the controller time to wake up
         time.sleep(0.100)
@@ -109,7 +109,7 @@ class rt_testcase(object):
     def get_serialport(self):
         """Shorthand for rebooting the STM32 and cycling USB"""
         self.enable_usb(False)
-        self.power_up()
+        self.set_power(4100, 50) # Just in case something had readjusted the values
         self.reset_stm32()
         # Give the controller time to wake up
         time.sleep(0.100)
