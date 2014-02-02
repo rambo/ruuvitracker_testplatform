@@ -26,6 +26,7 @@ class rt_testcase(object):
         self.pulse_trains = []
         self._active_pulse_train = False
         self.logger = None
+        self.voltage_timer = None
 
         # Finish by restoring a known state
         self.set_defaut_state()
@@ -98,6 +99,7 @@ class rt_testcase(object):
     def get_bootloader(self):
         """Shorthand for rebooting the STM32 to bootloader and cycling USB"""
         self.enable_usb(False)
+        self.power_up()
         self.reset_stm32(True)
         # Give the controller time to wake up
         time.sleep(0.100)
@@ -107,6 +109,7 @@ class rt_testcase(object):
     def get_serialport(self):
         """Shorthand for rebooting the STM32 and cycling USB"""
         self.enable_usb(False)
+        self.power_up()
         self.reset_stm32()
         # Give the controller time to wake up
         time.sleep(0.100)
@@ -142,25 +145,35 @@ class rt_testcase(object):
         self.log_data('','',short_pulse_count) # Do not waste time measuring voltage or current
         pass
 
-    def open_logfile(self, suffix=None):
+    def open_logfile(self, suffix=None, headers=None):
+        if not headers:
+            headers = [u'Time',u'Voltage', u'Current', u'Syncpulses']
         if not suffix:
             suffix = os.path.basename(__file__) # TODO: better automagic ?
-        filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'logs', "%s_%s" % (time.strftime("%Y-%m-%d_%H%M"), suffix))
+        filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'logs', "%s_%s.csv" % (time.strftime("%Y-%m-%d_%H%M"), suffix))
         # Open buffered file stream
         self.log_handle = io.open(filename, mode='wb')
         # Make it CSV
         self.logger = csv.writer(self.log_handle)
         # And write the header
-        self.logger.writerow([u'Time',u'Voltage', u'Current', u'Syncpulses'])
+        self.logger.writerow(headers)
 
     def log_data(self, *args):
+        """Logs arbitrary data to the logfile, the first column is automatically a timestamp though"""
         if not self.logger:
             self.open_logfile()
         row = [ datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f") ] + list(args)
         self.logger.writerow(row)
 
     def log_voltage_et_current(self):
+        """Logs both voltage and current to the logfile"""
         self.log_data(self.hp6632b.measure_voltage(), self.hp6632b.measure_current(), '')
+        return True
+
+    def set_log_voltage_et_current_interval(self, ms):
+        """Sets up a interval timer for logging voltage & current"""
+        self.voltage_timer = gobject.timeout_add(ms, self.log_voltage_et_current)
+        return self.voltage_timer
 
     # TODO: add methods for copying the testcase lua files to romfs (testcase.lua -> autorun.lua)
     
