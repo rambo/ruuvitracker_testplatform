@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """Baseclass for RuuviTracker testcases, since we need DBUS we will use glib mainloop as our eventloop"""
-
+import sys,os
 import gobject
 import dbus
 import dbus.service
@@ -9,9 +9,10 @@ dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
 from exceptions import NotImplementedError
 from scpi.devices import hp6632b
 from dbushelpers.call_cached import call_cached as dbus_call_cached
-import time
+import time, datetime
 import signal
-
+import io
+import csv
 
 class rt_testcase(object):
     def __init__(self, *args, **kwargs):
@@ -24,6 +25,7 @@ class rt_testcase(object):
         self.bus.add_signal_receiver(self.pulse_received, dbus_interface = "fi.hacklab.ardubus", signal_name = "alias_change", path=self.arduino_path)
         self.pulse_trains = []
         self._active_pulse_train = False
+        self.logger = None
 
         # Finish by restoring a known state
         self.set_defaut_state()
@@ -136,10 +138,29 @@ class rt_testcase(object):
         self.pulse_trains[-1].append(usec)
 
     def sync_received(self, short_pulse_count):
-        """Callback, you should override this to handle the syncs your tests need"""
-        print " *** Got sync of %d pulses ***" % short_pulse_count
-        print " *** self.pulse_trains = %s ***" % repr(self.pulse_trains)
+        """Callback, you should override this to handle the syncs your tests need (but call this if you want the sync logged)"""
+        self.log_data('','',short_pulse_count) # Do not waste time measuring voltage or current
         pass
+
+    def open_logfile(self, suffix=None):
+        if not suffix:
+            suffix = os.path.basename(__file__) # TODO: better automagic ?
+        filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'logs', "%s_%s" % (time.strftime("%Y-%m-%d_%H%M"), suffix))
+        # Open buffered file stream
+        self.log_handle = io.open(filename, mode='wt')
+        # Make it CSV
+        self.logger = csv.writer(self.log_handle)
+        # And write the header
+        self.logger.writerow([u'Time',u'Voltage', u'Current', u'Syncpulses'])
+
+    def log_data(self, *args):
+        if not self.logger:
+            self.open_logfile()
+        row = [datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")] + args
+        self.logger.writerow(row)
+
+    def log_voltage_et_current(self):
+        self.log_data(self.hp6632b.measure_voltage(), self.hp6632b.measure_current(), '')
 
     # TODO: add methods for copying the testcase lua files to romfs (testcase.lua -> autorun.lua)
     
@@ -161,6 +182,7 @@ class rt_testcase(object):
         self.loop.run()
 
     def quit(self):
+        self.log_handle.close()
         self.hp6632b.quit()
         self.loop.quit()
-    
+
