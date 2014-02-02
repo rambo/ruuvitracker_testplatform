@@ -10,10 +10,13 @@ from exceptions import NotImplementedError
 from scpi.devices import hp6632b
 from dbushelpers.call_cached import call_cached as dbus_call_cached
 import time
+import signal
+
 
 class rt_testcase(object):
     def __init__(self, *args, **kwargs):
         super(rt_testcase, self).__init__(*args, **kwargs)
+        self.loop = gobject.MainLoop()
         self.bus = dbus.SessionBus()
         self.hp6632b = hp6632b.rs232('/dev/ttyUSB0')
         self.arduino_path = "/fi/hacklab/ardubus/ruuvitracker_tester"
@@ -138,10 +141,26 @@ class rt_testcase(object):
         print " *** self.pulse_trains = %s ***" % repr(self.pulse_trains)
         pass
 
+    # TODO: add methods for copying the testcase lua files to romfs (testcase.lua -> autorun.lua)
+    
+    # TODO: add helper for recompiling
+    
+    # TODO: add helper for flashing
+
+    def hook_signals(self):
+        """Hooks common UNIX signals to corresponding handlers"""
+        signal.signal(signal.SIGTERM, self.quit)
+        signal.signal(signal.SIGQUIT, self.quit)
+        signal.signal(signal.SIGHUP, self.set_defaut_state)
+
     def run(self):
         """The actual test, must call run_eventloop and must be event-oriented for timing long-running events"""
         raise NotImplementedError()
 
     def run_eventloop(self):
-        loop = gobject.MainLoop()
-        loop.run()
+        self.loop.run()
+
+    def quit(self):
+        self.hp6632b.quit()
+        self.loop.quit()
+    
