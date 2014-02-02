@@ -101,6 +101,7 @@ class rt_testcase(object):
         time.sleep(0.100)
         self.enable_usb(True)
         # TODO: Make sure the serialport actually shows up on device tree
+        # TODO: Find out which /dev/ttyACM it got bound to and return that as string
 
     def run(self):
         """The actual test, must call run_eventloop and must be event-oriented for timing long-running events"""
