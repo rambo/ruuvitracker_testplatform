@@ -108,6 +108,8 @@ class rt_testcase(object):
 
     def get_bootloader(self):
         """Shorthand for rebooting the STM32 to bootloader and cycling USB"""
+        if self.usb_device_present(RT_DFU_DEVICEID):
+            return True
         self.enable_usb(False)
         self.set_power(4100, 50) # Just in case something had readjusted the values
         self.reset_stm32(True)
@@ -121,9 +123,13 @@ class rt_testcase(object):
             time.sleep(1)
             if ((time.time() - timeout_start) > self.usb_device_present_timeout):
                 raise RuntimeError("Could not find device %s in %f seconds" % (RT_DFU_DEVICEID, self.usb_device_present_timeout))
+        return True
 
     def get_serialport(self):
         """Shorthand for rebooting the STM32 and cycling USB"""
+        if self.usb_device_present(RT_SERIAL_DEVICEID):
+            # TODO: Find out which /dev/ttyACM it got bound to and return that as string
+            return
         self.enable_usb(False)
         self.set_power(4100, 50) # Just in case something had readjusted the values
         self.reset_stm32()
@@ -238,6 +244,10 @@ class rt_testcase(object):
             print " *** FLASH FAILED *** \n%s\n*** /FLASH FAILED (cmd: %s, returncode: %d ***" % (output, repr(cmd), p.returncode)
             return False
         return True
+        # cycle USB to get the correct device visible on the bus
+        self.enable_usb(False)
+        time.sleep(1.0)
+        self.enable_usb(True)
 
     def usb_device_present(self, devid, expect_iproduct=None):
         """Checks if given USB device is present on the bus, optionally can verify the iProduct string"""
