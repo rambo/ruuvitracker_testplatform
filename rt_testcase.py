@@ -37,7 +37,21 @@ class rt_testcase(object):
         self.logger = None
         self.log_handle = None
         self.voltage_timer = None
+        self._tick_count = 0 # How many ticks this test has been running, ticks are seconds
+        self._tick_limit = -1 # infinite
+        self._tick_timer = None # This will be set later
 
+        # Some defaults 
+        self.default_voltage = 4100 # millivolts
+        self.default_current = 50 # milliamps
+        self.default_pan = 10
+        self.default_tilt = 62
+        # note if you change these in setup() make sure theyre suitable
+        self.bootloader_voltage = 4100 # millivolts
+        self.bootloader_current = 50 # milliamps
+
+        # Testcase should define their defaults here
+        self.defaults_setup()
         # Finish by restoring a known state
         self.set_defaut_state()
 
@@ -47,12 +61,12 @@ class rt_testcase(object):
         self.hp6632b.reset()
         self.hp6632b.set_remote_mode() # Enter remote mode, so stray finger do not immediately ruin things for us
         self.hp6632b.set_output(False) # reset above actuall should do this, but make sure..
-        self.hp6632b.set_voltage(4100) # output is disabled, this is just default for us when we enable output
-        self.hp6632b.set_current(50) # 50mA should be safe enough
+        self.hp6632b.set_voltage(self.default_voltage) # output is disabled, this is just default for us when we enable output
+        self.hp6632b.set_current(self.default_current) # 50mA should be safe enough
         self.reset_stm32() # Everything is powered down but this will set the relevant pins to known state
         # Set the board upright and facing "forward"
-        self.set_pan(10)
-        self.set_tilt(62)
+        self.set_pan(self.default_pan)
+        self.set_tilt(self.default_tilt)
         time.sleep(0.700) # Give the servos time to actually move to position
         self.enable_servos(False) # The servos *will* jitter, in some angles more than others, disabling them prevents this
         self.pulse_trains = []
@@ -108,10 +122,16 @@ class rt_testcase(object):
 
     def get_bootloader(self):
         """Shorthand for rebooting the STM32 to bootloader and cycling USB"""
+        # See if we're lucky
+        if self.usb_device_present(RT_DFU_DEVICEID):
+            return True
+        # Try again with USB enabled (TODO: wire a sense pin so we can know if USB has power or not)
+        self.enable_usb(True)
+        time.sleep(0.500)
         if self.usb_device_present(RT_DFU_DEVICEID):
             return True
         self.enable_usb(False)
-        self.set_power(4100, 50) # Just in case something had readjusted the values
+        self.set_power(self.bootloader_voltage, self.bootloader_current) # Just in case something had readjusted the values
         self.reset_stm32(True)
         # Give the controller time to wake up
         time.sleep(0.100)
@@ -125,11 +145,20 @@ class rt_testcase(object):
                 raise RuntimeError("Could not find device %s in %f seconds" % (RT_DFU_DEVICEID, self.usb_device_present_timeout))
         return True
 
+    def get_serialport_tty(self):
+        """returns the tty path for the RT serial port"""
+        # TODO: Find out which /dev/ttyACM it got bound to and return that as string
+        return ''
+
     def get_serialport(self):
         """Shorthand for rebooting the STM32 and cycling USB"""
         if self.usb_device_present(RT_SERIAL_DEVICEID):
-            # TODO: Find out which /dev/ttyACM it got bound to and return that as string
-            return
+            return self.get_serialport_tty()
+        # Try again with USB enabled (TODO: wire a sense pin so we can know if USB has power or not)
+        self.enable_usb(True)
+        time.sleep(0.500)
+        if self.usb_device_present(RT_SERIAL_DEVICEID):
+            return self.get_serialport_tty()
         self.enable_usb(False)
         self.set_power(4100, 50) # Just in case something had readjusted the values
         self.reset_stm32()
@@ -143,7 +172,7 @@ class rt_testcase(object):
             time.sleep(1)
             if ((time.time() - timeout_start) > self.usb_device_present_timeout):
                 raise RuntimeError("Could not find device %s in %f seconds" % (RT_SERIAL_DEVICEID, self.usb_device_present_timeout))
-        # TODO: Find out which /dev/ttyACM it got bound to and return that as string
+        return self.get_serialport_tty()
 
     def pulse_received(self, alias, usec, sender):
         """This callback handles counting of the pulse-trains from pb0"""
@@ -269,9 +298,34 @@ class rt_testcase(object):
         signal.signal(signal.SIGQUIT, self.quit)
         signal.signal(signal.SIGHUP, self.set_defaut_state)
 
+    def defaults_setup(self):
+        """You can change config variables here before set_defaut_state is called"""
+        pass
+
+    def setup(self):
+        """Set up your test here"""
+        pass    
+
     def run(self):
-        """The actual test, must call run_eventloop and must be event-oriented for timing long-running events"""
-        raise NotImplementedError()
+        """The actual test, you must enable the eventloop to receive DBUS messages (like sync signals from the board), remember to use set_runtime or set some other event to call quit() before starting the loop"""
+        self.setup()
+        self.run_eventloop()
+
+    def set_runtime(self, seconds):
+        """Sets the runtime for this test in seconds (actually "ticks" but one tick is one second) and starts the timer, calling this again will reset the tick count"""
+        if not self._tick_timer:
+            self._tick_timer = gobject.timeout_add(1000, self._tick)
+        self._tick_count = 0
+        self._tick_limit = seconds
+
+    def _tick(self):
+        """Counts ticks, used to track long-running tests and give a handy way to log for X seconds and quit"""
+        self._tick_count += 1
+        if (    self._tick_limit > 0
+            and self._tick_count >= self._tick_limit):
+            print """ *** Tick limit of %d reached, quitting *** """ % self._tick_limit
+            self.quit()
+        return True
 
     def run_eventloop(self):
         self.loop.run()
