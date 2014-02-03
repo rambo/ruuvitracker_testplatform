@@ -14,11 +14,13 @@ import signal
 import io
 import csv
 import subprocess
+import timeout_decorator
 
-RT_DFU_DEVICEID='0483:df11'
-RT_SERIAL_DEVICEID='0483:5740'
-HP_SERIALPORT='/dev/ttyUSB0'
-
+RT_DFU_DEVICEID = '0483:df11'
+RT_SERIAL_DEVICEID = '0483:5740'
+HP_SERIALPORT = '/dev/ttyUSB0'
+COMPILE_TIMEOUT = 120  # seconds
+FLASH_TIMEOUT = 120 # seconds
 
 class rt_testcase(object):
     def __init__(self, *args, **kwargs):
@@ -197,9 +199,45 @@ class rt_testcase(object):
 
     # TODO: add methods for copying the testcase lua files to romfs (testcase.lua -> autorun.lua)
     
-    # TODO: add helper for recompiling
-    
-    # TODO: add helper for flashing
+    @timeout_decorator.timeout(COMPILE_TIMEOUT) # Uses sigalarm to make sure we don't deadlock
+    def recompile(self, *args):
+        """Runs ruuvi_build.sh, any extra arguments will be passed as args to the script"""
+        pi_backup = None
+        # This will mess up scons
+        if os.environ.has_key('PYTHONINSPECT'):
+            pi_backup = os.environ['PYTHONINSPECT']
+            del(os.environ['PYTHONINSPECT'])
+        cmd = [ "./ruuvi_build.sh" ]
+        if len(args) > 0:
+            cmd = cmd + list(args)
+        p = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=os.path.realpath(os.path.join(os.path.dirname(os.path.realpath(__file__)), '..' )))
+        output = p.communicate()
+        # restore the pythoninspect if it was set
+        if pi_backup:
+            os.environ['PYTHONINSPECT'] = pi_backup
+        # TODO: write to output to compile log
+        #print " *** COMPILE OUTPUT *** \n%s\n*** /COMPILE OUTPUT ***" % output
+        if p.returncode!= 0:
+            print " *** COMPILE FAILED *** \n%s\n*** /COMPILE FAILED (cmd: %s, returncode: %d ***" % (output, repr(cmd), p.returncode)
+            return False
+        return True
+
+    @timeout_decorator.timeout(FLASH_TIMEOUT) # Uses sigalarm to make sure we don't deadlock
+    def flash(self, *args):
+        """Runs ruuvi_program.sh, any extra arguments will be passed as args to the script, will call get_bootloader if the DFU device is not found"""
+        if not self.usb_device_present(RT_DFU_DEVICEID):
+            self.get_bootloader()
+        cmd = [ "./ruuvi_program.sh" ]
+        if len(args) > 0:
+            cmd = cmd + list(args)
+        p = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=os.path.realpath(os.path.join(os.path.dirname(os.path.realpath(__file__)), '..' )))
+        output = p.communicate()
+        # TODO: write to output to flash log
+        #print " *** FLASH OUTPUT *** \n%s\n*** /FLASH OUTPUT ***" % output
+        if p.returncode != 0:
+            print " *** FLASH FAILED *** \n%s\n*** /FLASH FAILED (cmd: %s, returncode: %d ***" % (output, repr(cmd), p.returncode)
+            return False
+        return True
 
     def usb_device_present(self, devid, expect_iproduct=None):
         """Checks if given USB device is present on the bus, optionally can verify the iProduct string"""
