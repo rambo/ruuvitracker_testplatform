@@ -1,4 +1,7 @@
-#!/usr/bin/env python -i
+#!/usr/bin/env python
+import os,sys
+# Put to interactive mode
+os.environ['PYTHONINSPECT'] = '1'
 
 from rt_testcase import rt_testcase
 import atexit

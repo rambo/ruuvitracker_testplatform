@@ -6,26 +6,34 @@ import dbus
 import dbus.service
 import dbus.mainloop.glib
 dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
-from exceptions import NotImplementedError
+from exceptions import NotImplementedError,RuntimeError
 from scpi.devices import hp6632b
 from dbushelpers.call_cached import call_cached as dbus_call_cached
 import time, datetime
 import signal
 import io
 import csv
+import subprocess
+
+RT_DFU_DEVICEID='0483:df11'
+RT_SERIAL_DEVICEID='0483:5740'
+HP_SERIALPORT='/dev/ttyUSB0'
+
 
 class rt_testcase(object):
     def __init__(self, *args, **kwargs):
         super(rt_testcase, self).__init__(*args, **kwargs)
         self.loop = gobject.MainLoop()
         self.bus = dbus.SessionBus()
-        self.hp6632b = hp6632b.rs232('/dev/ttyUSB0')
+        self.hp6632b = hp6632b.rs232(HP_SERIALPORT)
+        self.usb_device_present_timeout = 10.0
         self.arduino_path = "/fi/hacklab/ardubus/ruuvitracker_tester"
         # Currently our only input is the pulse so the method name is apt even though we trap all alias signals (also dio_change:s)
         self.bus.add_signal_receiver(self.pulse_received, dbus_interface = "fi.hacklab.ardubus", signal_name = "alias_change", path=self.arduino_path)
         self.pulse_trains = []
         self._active_pulse_train = False
         self.logger = None
+        self.log_handle = None
         self.voltage_timer = None
 
         # Finish by restoring a known state
@@ -104,7 +112,13 @@ class rt_testcase(object):
         # Give the controller time to wake up
         time.sleep(0.100)
         self.enable_usb(True)
-        # TODO: Make sure the bootloader actually shows up on device tree
+        # Make sure the serialport actually shows up on device tree
+        timeout_start = time.time()
+        while not self.usb_device_present(RT_DFU_DEVICEID):
+            # It will take a few moments, no need to keep spawning shells as fast as the computer can
+            time.sleep(1)
+            if ((time.time() - timeout_start) > self.usb_device_present_timeout):
+                raise RuntimeError("Could not find device %s in %f seconds" % (RT_DFU_DEVICEID, self.usb_device_present_timeout))
 
     def get_serialport(self):
         """Shorthand for rebooting the STM32 and cycling USB"""
@@ -114,7 +128,13 @@ class rt_testcase(object):
         # Give the controller time to wake up
         time.sleep(0.100)
         self.enable_usb(True)
-        # TODO: Make sure the serialport actually shows up on device tree
+        # Make sure the serialport actually shows up on device tree
+        timeout_start = time.time()
+        while not self.usb_device_present(RT_SERIAL_DEVICEID):
+            # It will take a few moments, no need to keep spawning shells as fast as the computer can
+            time.sleep(1)
+            if ((time.time() - timeout_start) > self.usb_device_present_timeout):
+                raise RuntimeError("Could not find device %s in %f seconds" % (RT_SERIAL_DEVICEID, self.usb_device_present_timeout))
         # TODO: Find out which /dev/ttyACM it got bound to and return that as string
 
     def pulse_received(self, alias, usec, sender):
@@ -181,6 +201,20 @@ class rt_testcase(object):
     
     # TODO: add helper for flashing
 
+    def usb_device_present(self, devid, expect_iproduct=None):
+        """Checks if given USB device is present on the bus, optionally can verify the iProduct string"""
+        if expect_iproduct:
+            raise NotImplementedError("this check is not yet implemented")
+        try:
+            out = subprocess.check_output([ "lsusb", "-d %s" % devid, "-v" ])
+            # TODO check output for the expected iProduct string
+            return True
+        except subprocess.CalledProcessError, e:
+            if e.returncode == 1:
+                return False
+            # some other error, re-raise it
+            raise e
+
     def hook_signals(self):
         """Hooks common UNIX signals to corresponding handlers"""
         signal.signal(signal.SIGTERM, self.quit)
@@ -195,7 +229,8 @@ class rt_testcase(object):
         self.loop.run()
 
     def quit(self):
-        self.log_handle.close()
+        if self.log_handle:
+            self.log_handle.close()
         self.hp6632b.quit()
         self.loop.quit()
 
