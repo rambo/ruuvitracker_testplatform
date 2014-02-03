@@ -15,6 +15,8 @@ import io
 import csv
 import subprocess
 import timeout_decorator
+import pyudev
+
 
 RT_DFU_DEVICEID = '0483:df11'
 RT_SERIAL_DEVICEID = '0483:5740'
@@ -145,20 +147,24 @@ class rt_testcase(object):
                 raise RuntimeError("Could not find device %s in %f seconds" % (RT_DFU_DEVICEID, self.usb_device_present_timeout))
         return True
 
-    def get_serialport_tty(self):
-        """returns the tty path for the RT serial port"""
+    def get_serialport_tty(self, devid):
+        """returns the tty path for given device id (well the first one anyway)"""
         # TODO: Find out which /dev/ttyACM it got bound to and return that as string
+        context = pyudev.Context()
+        for device in context.list_devices(subsystem='tty', ID_VENDOR_ID=devid.split(':')[0], ID_MODEL_ID=devid.split(':')[1]):
+            return device['DEVNAME']
+        # TODO: Raise error ??
         return ''
 
     def get_serialport(self):
         """Shorthand for rebooting the STM32 and cycling USB"""
         if self.usb_device_present(RT_SERIAL_DEVICEID):
-            return self.get_serialport_tty()
+            return self.get_serialport_tty(RT_SERIAL_DEVICEID)
         # Try again with USB enabled (TODO: wire a sense pin so we can know if USB has power or not)
         self.enable_usb(True)
         time.sleep(0.500)
         if self.usb_device_present(RT_SERIAL_DEVICEID):
-            return self.get_serialport_tty()
+            return self.get_serialport_tty(RT_SERIAL_DEVICEID)
         self.enable_usb(False)
         self.set_power(4100, 50) # Just in case something had readjusted the values
         self.reset_stm32()
@@ -172,7 +178,7 @@ class rt_testcase(object):
             time.sleep(1)
             if ((time.time() - timeout_start) > self.usb_device_present_timeout):
                 raise RuntimeError("Could not find device %s in %f seconds" % (RT_SERIAL_DEVICEID, self.usb_device_present_timeout))
-        return self.get_serialport_tty()
+        return self.get_serialport_tty(RT_SERIAL_DEVICEID)
 
     def pulse_received(self, alias, usec, sender):
         """This callback handles counting of the pulse-trains from pb0"""
@@ -280,6 +286,7 @@ class rt_testcase(object):
 
     def usb_device_present(self, devid, expect_iproduct=None):
         """Checks if given USB device is present on the bus, optionally can verify the iProduct string"""
+        # TODO: switch to udev, though it's a bit more complex (Especially for the RT DFU vs Serialport case...)
         if expect_iproduct:
             raise NotImplementedError("this check is not yet implemented")
         try:
