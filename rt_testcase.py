@@ -141,6 +141,7 @@ class rt_testcase(object):
         if self.usb_device_present(RT_DFU_DEVICEID):
             return True
         # Try again with USB enabled (TODO: wire a sense pin so we can know if USB has power or not)
+        self.hp6632b.set_output(True)
         self.enable_usb(True)
         time.sleep(0.500)
         if self.usb_device_present(RT_DFU_DEVICEID):
@@ -166,9 +167,7 @@ class rt_testcase(object):
         context = pyudev.Context()
         for device in context.list_devices(subsystem='tty', ID_VENDOR_ID=devid.split(':')[0], ID_MODEL_ID=devid.split(':')[1]):
             return device['DEVNAME']
-        # TODO: Raise error ??
-        return ''
-
+        raise RuntimeError("Could not find device %s" % devid)
 
     def get_serialport(self):
         """Shorthand for rebooting the STM32 and cycling USB"""
@@ -177,7 +176,7 @@ class rt_testcase(object):
         # Try again with USB & module enabled (TODO: wire a sense pin so we can know if USB has power or not)
         self.hp6632b.set_output(True)
         if self.hp6632b.measure_voltage() < 3700: 
-            self.set_power(4100, 50) # Just in case something had readjusted the values
+            self.set_power(self.default_voltage, self.default_current) # Just in case something had readjusted the values
         self.enable_usb(True)
         timeout_start = time.time()
         while not self.usb_device_present(RT_SERIAL_DEVICEID):
@@ -265,6 +264,7 @@ class rt_testcase(object):
     @timeout_decorator.timeout(COMPILE_TIMEOUT) # Uses sigalarm to make sure we don't deadlock
     def recompile(self, *args):
         """Runs ruuvi_build.sh, any extra arguments will be passed as args to the script"""
+        print " *** Compiling ***"
         pi_backup = None
         # This will mess up scons
         if os.environ.has_key('PYTHONINSPECT'):
@@ -283,11 +283,13 @@ class rt_testcase(object):
         if p.returncode!= 0:
             print " *** COMPILE FAILED *** \n%s\n*** /COMPILE FAILED (cmd: %s, returncode: %d ***" % (output, repr(cmd), p.returncode)
             return False
+        print " *** Compile done ***"
         return True
 
     @timeout_decorator.timeout(FLASH_TIMEOUT) # Uses sigalarm to make sure we don't deadlock
     def flash(self, *args):
         """Runs ruuvi_program.sh, any extra arguments will be passed as args to the script, will call get_bootloader if the DFU device is not found. NOTE: this will disconnect USB (it needs to be cycled anyway to get the correct device enumerated)"""
+        print " *** Flashing ***"
         if not self.usb_device_present(RT_DFU_DEVICEID):
             self.get_bootloader()
         cmd = [ "./ruuvi_program.sh" ]
@@ -301,6 +303,7 @@ class rt_testcase(object):
             print " *** FLASH FAILED *** \n%s\n*** /FLASH FAILED (cmd: %s, returncode: %d ***" % (output, repr(cmd), p.returncode)
             return False
         self.enable_usb(False)
+        print " *** Flashing done ***"
         return True
 
     def usb_device_present(self, devid, expect_iproduct=None):
@@ -344,14 +347,15 @@ class rt_testcase(object):
 
     def recompile_and_flash(self):
         """Mainly for manual testing without having to handle the module in the testrig"""
-        self.recompile()
-        self.flash()
+        if not self.recompile():
+            raise RuntimeError("Could not compile, not flashing either")
+        return self.flash()
 
     def copy_compile_flash(self):
         """Shorthand for calling copy_testcase_lua() recompile() flash() """
         self.copy_testcase_lua()
-        self.recompile()
-        self.flash()
+        if not self.recompile_and_flash()
+            raise RuntimeError("Could not compile/flash")
 
     def setup(self):
         """Set up your test here"""
