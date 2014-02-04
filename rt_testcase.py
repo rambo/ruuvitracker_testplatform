@@ -21,7 +21,7 @@ import shutil
 
 RT_DFU_DEVICEID = '0483:df11'
 RT_SERIAL_DEVICEID = '0483:5740'
-HP_SERIALPORT = '/dev/ttyUSB0'
+HP_SERIALPORT = '/dev/ttyUSB0' # TODO: use udev to locate this one too...
 COMPILE_TIMEOUT = 120  # seconds
 FLASH_TIMEOUT = 120 # seconds
 
