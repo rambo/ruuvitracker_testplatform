@@ -21,7 +21,7 @@ import shutil
 
 RT_DFU_DEVICEID = '0483:df11'
 RT_SERIAL_DEVICEID = '0483:5740'
-HP_SERIALPORT = '/dev/ttyUSB0' # TODO: use udev to locate this one too...
+HP_SERIALPORT_DEVICEID = '067b:2303' # TODO: Make configurable in yaml or something
 COMPILE_TIMEOUT = 120  # seconds
 FLASH_TIMEOUT = 120 # seconds
 
@@ -33,7 +33,7 @@ class rt_testcase(object):
 
         self.loop = gobject.MainLoop()
         self.bus = dbus.SessionBus()
-        self.hp6632b = hp6632b.rs232(HP_SERIALPORT)
+        self.hp6632b = hp6632b.rs232(self.get_serialport_tty(HP_SERIALPORT_DEVICEID))
         self.usb_device_present_timeout = 10.0
         self.arduino_path = "/fi/hacklab/ardubus/ruuvitracker_tester"
         # Currently our only input is the pulse so the method name is apt even though we trap all alias signals (also dio_change:s)
@@ -174,11 +174,18 @@ class rt_testcase(object):
         """Shorthand for rebooting the STM32 and cycling USB"""
         if self.usb_device_present(RT_SERIAL_DEVICEID):
             return self.get_serialport_tty(RT_SERIAL_DEVICEID)
-        # Try again with USB enabled (TODO: wire a sense pin so we can know if USB has power or not)
+        # Try again with USB & module enabled (TODO: wire a sense pin so we can know if USB has power or not)
+        self.hp6632b.set_output(True)
+        if self.hp6632b.measure_voltage() < 3700: 
+            self.set_power(4100, 50) # Just in case something had readjusted the values
         self.enable_usb(True)
-        time.sleep(0.500)
-        if self.usb_device_present(RT_SERIAL_DEVICEID):
-            return self.get_serialport_tty(RT_SERIAL_DEVICEID)
+        timeout_start = time.time()
+        while not self.usb_device_present(RT_SERIAL_DEVICEID):
+            # It will take a few moments, no need to keep spawning shells as fast as the computer can
+            time.sleep(1)
+            if ((time.time() - timeout_start) > 2.0):
+                break
+        # Still nothing, cycle USB, reset the board
         self.enable_usb(False)
         self.set_power(4100, 50) # Just in case something had readjusted the values
         self.reset_stm32()
@@ -334,6 +341,11 @@ class rt_testcase(object):
         testcases_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'testcases' )
         self.copy_file(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'testhelpers.lua'), os.path.join(romfs_path, 'testhelpers.lua'))
         self.copy_file(os.path.join(testcases_path, '%s.lua' % self.testname), os.path.join(romfs_path, 'autorun.lua'))
+
+    def recompile_and_flash(self):
+        """Mainly for manual testing without having to handle the module in the testrig"""
+        self.recompile()
+        self.flash()
 
     def copy_compile_flash(self):
         """Shorthand for calling copy_testcase_lua() recompile() flash() """

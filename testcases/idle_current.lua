@@ -18,5 +18,6 @@ sd.disable()
 th.send_syncpulses(2)
 ruuvi.delay_ms(10000)
 
--- Third syncpoint and do nothing.
+-- Third syncpoint and re-enable sdcard.
 th.send_syncpulses(3)
+sd.enable()

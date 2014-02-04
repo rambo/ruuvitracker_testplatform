@@ -30,7 +30,7 @@ class idle_current(rt_testcase):
         if short_pulse_count == 2:
             comment = 'SD card off'
         if short_pulse_count == 3:
-            comment = 'End of test program'
+            comment = 'End of test program (sd-card re-enabled, control drops to eLua shell)'
         self.log_data('','',short_pulse_count, comment)
 
 
