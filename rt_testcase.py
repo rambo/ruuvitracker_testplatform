@@ -261,6 +261,19 @@ class rt_testcase(object):
         self.voltage_timer = gobject.timeout_add(ms, self.log_voltage_et_current)
         return self.voltage_timer
 
+    def verify_sync(self):
+        """Make sure we have at least one sync pulse train"""
+        if len(self.pulse_trains) == 0:
+            print " ***** NO syncs received, aborting *****"
+            self.quit(False)
+            from exceptions import RuntimeError
+            raise RuntimeError("First sync not received in reasonable time, cleanup() has not been called")
+        return False
+        
+    def expect_sync_in(self, ms):
+        """Sets up a timer to verify we have sync to trigger in X ms"""
+        gobject.timeout_add(ms, self.verify_sync)
+
     @timeout_decorator.timeout(COMPILE_TIMEOUT) # Uses sigalarm to make sure we don't deadlock
     def recompile(self, *args):
         """Runs ruuvi_build.sh, any extra arguments will be passed as args to the script"""
@@ -354,7 +367,7 @@ class rt_testcase(object):
     def copy_compile_flash(self):
         """Shorthand for calling copy_testcase_lua() recompile() flash() """
         self.copy_testcase_lua()
-        if not self.recompile_and_flash()
+        if not self.recompile_and_flash():
             raise RuntimeError("Could not compile/flash")
 
     def setup(self):
@@ -393,10 +406,11 @@ class rt_testcase(object):
             print " * cleanup up file %s" % f
             os.unlink(f)
 
-    def quit(self):
+    def quit(self, cleanup=True):
         """Tears down the SCPI connections, closes log handles and quits the mainloop"""
         self.loop.quit()
         self.hp6632b.quit()
         if self.log_handle:
             self.log_handle.close()
-        self.cleanup()
+        if cleanup:
+            self.cleanup()
