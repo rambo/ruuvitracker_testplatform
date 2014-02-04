@@ -1,10 +1,5 @@
 -- Helpers
 th = require "testhelpers"
-
--- Disable charger
-chg = require "charger"
-chg.disable()
-
 -- We'll need this later
 sd = require "sdcard"
 

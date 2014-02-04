@@ -18,8 +18,9 @@ class idle_current(rt_testcase):
     def setup(self):
         self.copy_compile_flash()
         self.hold_stm32_reset() # Hold the MCU in reset untill we're ready to continue
-        self.set_runtime(30) # Log extra 10s over the normal test run time.
+        self.enable_usb(False)
         self.set_power(4100, 500)
+        self.set_runtime(30) # Log extra 10s over the normal test run time.
         self.release_stm32_reset()
 
     def sync_received(self, short_pulse_count):
