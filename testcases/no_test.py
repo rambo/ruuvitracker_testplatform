@@ -15,7 +15,7 @@ class no_test(rt_testcase):
         super(no_test, self).__init__(*args, **kwargs)
         self.testname = 'no_test'
 
-    def setup(self):
+    def run(self):
         self.recompile_and_flash()
         self.quit()
 

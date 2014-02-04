@@ -391,9 +391,8 @@ class rt_testcase(object):
 
     def quit(self):
         """Tears down the SCPI connections, closes log handles and quits the mainloop"""
+        self.loop.quit()
+        self.hp6632b.quit()
         if self.log_handle:
             self.log_handle.close()
         self.cleanup()
-        self.hp6632b.quit()
-        self.loop.quit()
-
