@@ -6,7 +6,7 @@ Using the (currently) one and only test rig by rambo
 
     sudo apt-get install python-pyudev
 
-### Dependencies with apt packages
+### Dependencies without apt packages
 
   - <https://github.com/rambo/arDuBUS>
   - <https://github.com/rambo/python-scpi>
