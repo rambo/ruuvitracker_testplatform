@@ -13,5 +13,30 @@ from rt_testcase import rt_testcase
 class idle_current(rt_testcase):
     def __init__(self, *args, **kwargs):
         super(idle_current, self).__init__(*args, **kwargs)
+        self.testname = 'idle_current' # Makes easier to figure out which lua file to copy...
 
+    def setup(self):
+        self.copy_compile_flash()
+        self.hold_stm32_reset() # Hold the MCU in reset untill we're ready to continue
+        self.set_runtime(30) # Log extra 10s over the normal test run time.
+        self.set_power(4100, 500)
+        self.release_stm32_reset()
+
+    def sync_received(self, short_pulse_count):
+        comment = ''
+        if short_pulse_count == 1:
+            comment = 'SD card on'
+            self.set_log_voltage_et_current_interval(1000)
+        if short_pulse_count == 2:
+            comment = 'SD card off'
+        if short_pulse_count == 3:
+            comment = 'End of test program'
+        self.log_data('','',short_pulse_count, comment)
+
+
+if __name__ == '__main__':
+    test = idle_current()
+    print " ***** START ***** "
+    test.run()
+    print " ***** DONE ***** "
 

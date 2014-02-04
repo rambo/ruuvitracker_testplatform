@@ -16,6 +16,7 @@ import csv
 import subprocess
 import timeout_decorator
 import pyudev
+import shutil
 
 
 RT_DFU_DEVICEID = '0483:df11'
@@ -27,6 +28,9 @@ FLASH_TIMEOUT = 120 # seconds
 class rt_testcase(object):
     def __init__(self, *args, **kwargs):
         super(rt_testcase, self).__init__(*args, **kwargs)
+        self.testname = '' # This should be the testcase class
+
+
         self.loop = gobject.MainLoop()
         self.bus = dbus.SessionBus()
         self.hp6632b = hp6632b.rs232(HP_SERIALPORT)
@@ -42,6 +46,7 @@ class rt_testcase(object):
         self._tick_count = 0 # How many ticks this test has been running, ticks are seconds
         self._tick_limit = -1 # infinite
         self._tick_timer = None # This will be set later
+        self._cleanup_files = []
 
         # Some defaults 
         self.default_voltage = 4100 # millivolts
@@ -109,15 +114,23 @@ class rt_testcase(object):
         """Enables power to the USB hub, or disables if state is set to False"""
         dbus_call_cached(self.arduino_path, 'set_alias', 'usb_power', state)
 
+    def hold_stm32_reset(self):
+        """Holds the reset line down"""
+        dbus_call_cached(self.arduino_path, 'set_alias', 'rt_nrst', False)
+
+    def release_stm32_reset(self):
+        """Releases the reset line"""
+        dbus_call_cached(self.arduino_path, 'set_alias', 'rt_nrst', True)
+
     def reset_stm32(self, enter_bootloader=False):
         """Boots the STM32 on the board, optionally will enter bootloader mode (though only if the board is actually powered on at this point...)"""
         if enter_bootloader:
             dbus_call_cached(self.arduino_path, 'set_alias', 'rt_boot0', True)
         else:
             dbus_call_cached(self.arduino_path, 'set_alias', 'rt_boot0', False)
-        dbus_call_cached(self.arduino_path, 'set_alias', 'rt_nrst', False)
+        self.hold_stm32_reset()
         time.sleep(0.100)
-        dbus_call_cached(self.arduino_path, 'set_alias', 'rt_nrst', True)
+        self.release_stm32_reset()
         if enter_bootloader:
             time.sleep(0.100)
             dbus_call_cached(self.arduino_path, 'set_alias', 'rt_boot0', False)
@@ -155,6 +168,7 @@ class rt_testcase(object):
             return device['DEVNAME']
         # TODO: Raise error ??
         return ''
+
 
     def get_serialport(self):
         """Shorthand for rebooting the STM32 and cycling USB"""
@@ -205,14 +219,16 @@ class rt_testcase(object):
 
     def sync_received(self, short_pulse_count):
         """Callback, you should override this to handle the syncs your tests need (but call this if you want the sync logged)"""
-        self.log_data('','',short_pulse_count) # Do not waste time measuring voltage or current
+        self.log_data('','',short_pulse_count, '') # Do not waste time measuring voltage or current
         pass
 
-    def open_logfile(self, suffix=None, headers=None):
+    def open_logfile(self, headers=None):
+        """Opens a timestamped logfile named after self.testname, and writes the first row as headers for CSV data. The file is buffered so you cannot tail it in realtime"""
         if not headers:
-            headers = [u'Time',u'Voltage', u'Current', u'Syncpulses']
+            headers = [u'Time',u'Voltage', u'Current', u'Syncpulses', u'Comment']
+        suffix = self.testname
         if not suffix:
-            suffix = os.path.basename(__file__) # TODO: better automagic ?
+            suffix = os.path.basename(__file__)
         filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'logs', "%s_%s.csv" % (time.strftime("%Y-%m-%d_%H%M"), suffix))
         # Open buffered file stream
         self.log_handle = io.open(filename, mode='wb')
@@ -234,12 +250,11 @@ class rt_testcase(object):
         return True
 
     def set_log_voltage_et_current_interval(self, ms):
-        """Sets up a interval timer for logging voltage & current"""
+        """Sets up a interval timer for logging voltage & current (and logs the first line immediately)"""
+        self.log_voltage_et_current()
         self.voltage_timer = gobject.timeout_add(ms, self.log_voltage_et_current)
         return self.voltage_timer
 
-    # TODO: add methods for copying the testcase lua files to romfs (testcase.lua -> autorun.lua)
-    
     @timeout_decorator.timeout(COMPILE_TIMEOUT) # Uses sigalarm to make sure we don't deadlock
     def recompile(self, *args):
         """Runs ruuvi_build.sh, any extra arguments will be passed as args to the script"""
@@ -265,7 +280,7 @@ class rt_testcase(object):
 
     @timeout_decorator.timeout(FLASH_TIMEOUT) # Uses sigalarm to make sure we don't deadlock
     def flash(self, *args):
-        """Runs ruuvi_program.sh, any extra arguments will be passed as args to the script, will call get_bootloader if the DFU device is not found"""
+        """Runs ruuvi_program.sh, any extra arguments will be passed as args to the script, will call get_bootloader if the DFU device is not found. NOTE: this will disconnect USB (it needs to be cycled anyway to get the correct device enumerated)"""
         if not self.usb_device_present(RT_DFU_DEVICEID):
             self.get_bootloader()
         cmd = [ "./ruuvi_program.sh" ]
@@ -278,11 +293,8 @@ class rt_testcase(object):
         if p.returncode != 0:
             print " *** FLASH FAILED *** \n%s\n*** /FLASH FAILED (cmd: %s, returncode: %d ***" % (output, repr(cmd), p.returncode)
             return False
-        return True
-        # cycle USB to get the correct device visible on the bus
         self.enable_usb(False)
-        time.sleep(1.0)
-        self.enable_usb(True)
+        return True
 
     def usb_device_present(self, devid, expect_iproduct=None):
         """Checks if given USB device is present on the bus, optionally can verify the iProduct string"""
@@ -308,6 +320,26 @@ class rt_testcase(object):
     def defaults_setup(self):
         """You can change config variables here before set_defaut_state is called"""
         pass
+
+    def copy_file(self, source, target):
+        """Makes copies source to target, basically shutil.copyfile but adds the target to our cleanup list"""
+        shutil.copyfile(source, target)
+        self._cleanup_files.append(target)
+
+    def copy_testcase_lua(self):
+        """Copies the test helpers and the testcase lua script to romfs"""
+        if not self.testname:
+            raise RuntimeError("self.testname is not defined")
+        romfs_path = os.path.realpath(os.path.join(os.path.dirname(os.path.realpath(__file__)), '..', 'romfs' ))
+        testcases_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'testcases' )
+        self.copy_file(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'testhelpers.lua'), os.path.join(romfs_path, 'testhelpers.lua'))
+        self.copy_file(os.path.join(testcases_path, '%s.lua' % self.testname), os.path.join(romfs_path, 'autorun.lua'))
+
+    def copy_compile_flash(self):
+        """Shorthand for calling copy_testcase_lua() recompile() flash() """
+        self.copy_testcase_lua()
+        self.recompile()
+        self.flash()
 
     def setup(self):
         """Set up your test here"""
@@ -337,9 +369,19 @@ class rt_testcase(object):
     def run_eventloop(self):
         self.loop.run()
 
+    def cleanup(self):
+        """Cleans up files we copied to the build tree"""
+        for f in self._cleanup_files:
+            if not os.path.exists(f):
+                continue
+            print " * cleanup up file %s" % f
+            os.unlink(f)
+
     def quit(self):
+        """Tears down the SCPI connections, closes log handles and quits the mainloop"""
         if self.log_handle:
             self.log_handle.close()
+        self.cleanup()
         self.hp6632b.quit()
         self.loop.quit()
 
