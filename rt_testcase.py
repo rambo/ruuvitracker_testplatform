@@ -47,6 +47,7 @@ class rt_testcase(object):
         self._tick_limit = -1 # infinite
         self._tick_timer = None # This will be set later
         self._cleanup_files = []
+        self._min_servo_step_time = 50 # ms
 
         # Some defaults 
         self.default_voltage = 4100 # millivolts
@@ -72,6 +73,7 @@ class rt_testcase(object):
         self.hp6632b.set_current(self.default_current) # 50mA should be safe enough
         self.reset_stm32() # Everything is powered down but this will set the relevant pins to known state
         # Set the board upright and facing "forward"
+        self.enable_servos(True) # The servos *will* jitter, in some angles more than others, disabling them prevents this
         self.set_pan(self.default_pan)
         self.set_tilt(self.default_tilt)
         time.sleep(0.700) # Give the servos time to actually move to position
@@ -95,16 +97,33 @@ class rt_testcase(object):
         self.hp6632b.set_output(True)
 
     def set_pan(self, angle):
-        """Enables servo power and sets target angle for the pan-servo, you are responsible for disabling servo power later"""
-        self.enable_servos()
+        """sets target angle for the pan-servo, you are responsible for enabling & disabling servo power"""
         dbus_call_cached(self.arduino_path, 'set_alias', 'pan', angle)
 
     def set_tilt(self, angle):
-        """Enables servo power and sets target angle for the tilt-servo, you are responsible for disabling servo power later"""
-        self.enable_servos()
+        """sets target angle for the tilt-servo, you are responsible for enabling & disabling servo power"""
         dbus_call_cached(self.arduino_path, 'set_alias', 'tilt', angle)
 
-    # TODO: methods to do variable speed pan & tilt from a to b
+    def servo_from_to(self, servo_callback, pan_from, pan_to, pan_time):
+        """Move servo_alias from position to position in (approx) pan_time seconds"""
+        steps = abs(pan_from - pan_to)
+        ms_per_step = (float(pan_time) * 1000) / steps
+        while ms_per_step < self._min_servo_step_time:
+            steps -= 1
+            ms_per_step = (float(pan_time) * 1000) / steps
+            if steps <= 1: # we could not get a sensinble values, just hit the target position
+                servo_callback(pan_to)
+                return
+        for step in range(steps+1):
+            gobject.timeout_add(ms_per_step*step, servo_callback, pan_from-int(step*float(pan_from - pan_to)/steps))
+
+    def pan_from_to(self, pan_from, pan_to, pan_time):
+        """Pan from position to position in (approx) pan_time seconds"""
+        self.servo_from_to(self.set_pan, pan_from, pan_to, pan_time)
+
+    def tilt_from_to(self, pan_from, pan_to, pan_time):
+        """Pan from position to position in (approx) pan_time seconds"""
+        self.servo_from_to(self.set_pan, pan_from, pan_to, pan_time)
 
     def enable_servos(self, state=True):
         """Enables servo DC power, or disables if state is set to False"""
