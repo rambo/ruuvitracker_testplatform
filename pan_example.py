@@ -5,15 +5,17 @@ import os,sys
 
 from rt_testcase import rt_testcase
 import atexit
-
 c = rt_testcase()
 atexit.register(c.quit)
 
-c.set_runtime(7)
+c.set_runtime(10)
 c.enable_servos(True)
 c.pan_from_to(20, 120, 3.0)
 c.tilt_from_to(20, 120, 2.0)
 c.tilt_from_to(120, 20, 2.0, 2500)
 c.pan_from_to(120, 20, 3.0, 3000)
+
+import gobject
+gobject.timeout_add(7000, c.set_defaut_state)
 
 c.run_eventloop()
