@@ -104,8 +104,8 @@ class rt_testcase(object):
         """sets target angle for the tilt-servo, you are responsible for enabling & disabling servo power"""
         dbus_call_cached(self.arduino_path, 'set_alias', 'tilt', angle)
 
-    def servo_from_to(self, servo_callback, pan_from, pan_to, pan_time):
-        """Move servo_alias from position to position in (approx) pan_time seconds"""
+    def servo_from_to(self, servo_callback, pan_from, pan_to, pan_time, offset=0):
+        """Move servo_alias from position to position in (approx) pan_time seconds (delayed by offset ms)"""
         steps = abs(pan_from - pan_to)
         ms_per_step = (float(pan_time) * 1000) / steps
         while ms_per_step < self._min_servo_step_time:
@@ -115,15 +115,16 @@ class rt_testcase(object):
                 servo_callback(pan_to)
                 return
         for step in range(steps+1):
-            gobject.timeout_add(ms_per_step*step, servo_callback, pan_from-int(step*float(pan_from - pan_to)/steps))
+            #print "gobject.timeout_add(%d, %s, %d)" % (int(ms_per_step*step), servo_callback, pan_from-int(step*float(pan_from - pan_to)/steps)) 
+            gobject.timeout_add(int((ms_per_step*step)+offset), servo_callback, pan_from-int(step*float(pan_from - pan_to)/steps))
 
-    def pan_from_to(self, pan_from, pan_to, pan_time):
-        """Pan from position to position in (approx) pan_time seconds"""
-        self.servo_from_to(self.set_pan, pan_from, pan_to, pan_time)
+    def pan_from_to(self, pan_from, pan_to, pan_time, offset=0):
+        """Pan from position to position in (approx) pan_time seconds (delayed by offset ms)"""
+        self.servo_from_to(self.set_pan, pan_from, pan_to, pan_time, offset)
 
-    def tilt_from_to(self, pan_from, pan_to, pan_time):
-        """Pan from position to position in (approx) pan_time seconds"""
-        self.servo_from_to(self.set_pan, pan_from, pan_to, pan_time)
+    def tilt_from_to(self, pan_from, pan_to, pan_time, offset=0):
+        """Pan from position to position in (approx) pan_time seconds (delayed by offset ms)"""
+        self.servo_from_to(self.set_tilt, pan_from, pan_to, pan_time, offset)
 
     def enable_servos(self, state=True):
         """Enables servo DC power, or disables if state is set to False"""
