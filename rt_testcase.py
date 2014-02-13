@@ -32,13 +32,13 @@ class rt_testcase(object):
         self.testname = '' # This should be the testcase class
 
 
+        self.arduino_path = "/fi/hacklab/ardubus/ruuvitracker_tester"
         self.loop = gobject.MainLoop()
         self.bus = dbus.SessionBus()
         # Make sure the HP is powered
         dbus_call_cached(self.arduino_path, 'set_alias', 'hp_power', True)
         self.hp6632b = hp6632b.rs232(self.get_serialport_tty(HP_SERIALPORT_DEVICEID))
         self.usb_device_present_timeout = 10.0
-        self.arduino_path = "/fi/hacklab/ardubus/ruuvitracker_tester"
         # Currently our only input is the pulse so the method name is apt even though we trap all alias signals (also dio_change:s)
         self.bus.add_signal_receiver(self.pulse_received, dbus_interface = "fi.hacklab.ardubus", signal_name = "alias_change", path=self.arduino_path)
         self.pulse_trains = []
