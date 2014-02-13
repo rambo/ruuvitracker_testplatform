@@ -3,6 +3,10 @@ ruuvitracker_tester:
     digital_out_pins: # pins passed to ARDUBUS_DIGITAL_OUTPUTS
         - pin: A0
           alias: servo_power
+        - pin: A1
+          alias: relay1
+        - pin: A2
+          alias: hp_power
         - pin: A3
           alias: usb_power
         - pin: 4
