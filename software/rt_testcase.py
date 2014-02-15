@@ -173,10 +173,11 @@ class rt_testcase(object):
         # Try again with USB enabled (TODO: wire a sense pin so we can know if USB has power or not)
         self.hp6632b.set_output(True)
         self.enable_usb(True)
-        time.sleep(0.500)
+        time.sleep(0.500) # TODO: instead of hard sleep loop check with timeout
         if self.usb_device_present(RT_DFU_DEVICEID):
             return True
         self.enable_usb(False)
+        time.sleep(0.100)
         self.set_power(self.bootloader_voltage, self.bootloader_current) # Just in case something had readjusted the values
         self.reset_stm32(True)
         # Give the controller time to wake up
