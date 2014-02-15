@@ -137,6 +137,16 @@ class rt_testcase(object):
         """Enables power to the USB hub, or disables if state is set to False"""
         dbus_call_cached(self.arduino_path, 'set_alias', 'usb_power', state)
 
+    def disable_usb(self, state=False):
+        """Shorthand for enable_usb(False)"""
+        self.enable_usb(False)
+
+    def cycle_usb(self, wait=0.200):
+        """Disables and Enables USB, sleeping the given time in between"""
+        self.disable_usb()
+        time.sleep(wait)
+        self.enable_usb()
+
     def hold_stm32_reset(self):
         """Holds the reset line down"""
         dbus_call_cached(self.arduino_path, 'set_alias', 'rt_nrst', False)
@@ -145,12 +155,11 @@ class rt_testcase(object):
         """Releases the reset line"""
         dbus_call_cached(self.arduino_path, 'set_alias', 'rt_nrst', True)
 
-    def pulse_boot0(self):
+    def pulse_boot0(self, wait=0.500):
         """Pushes and releases the bootloader/wakeup button on pa0"""
         dbus_call_cached(self.arduino_path, 'set_alias', 'rt_boot0', True)
-        time.sleep(0.500)
+        time.sleep(wait)
         dbus_call_cached(self.arduino_path, 'set_alias', 'rt_boot0', False)
-
 
     def reset_stm32(self, enter_bootloader=False):
         """Boots the STM32 on the board, optionally will enter bootloader mode (though only if the board is actually powered on at this point...)"""
