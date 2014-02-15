@@ -182,9 +182,9 @@ class rt_testcase(object):
         # Try again with USB enabled (TODO: wire a sense pin so we can know if USB has power or not)
         self.hp6632b.set_output(True)
         self.enable_usb(True)
-        time.sleep(0.500) # TODO: instead of hard sleep loop check with timeout
-        if self.usb_device_present(RT_DFU_DEVICEID):
-            return True
+        if self.wait_for_usb_device(RT_DFU_DEVICEID, 2):
+            return self.get_serialport_tty(RT_DFU_DEVICEID)
+        # Still nothing, hard cycle everything
         self.enable_usb(False)
         time.sleep(0.100)
         self.set_power(self.bootloader_voltage, self.bootloader_current) # Just in case something had readjusted the values
@@ -193,12 +193,8 @@ class rt_testcase(object):
         time.sleep(0.100)
         self.enable_usb(True)
         # Make sure the serialport actually shows up on device tree
-        timeout_start = time.time()
-        while not self.usb_device_present(RT_DFU_DEVICEID):
-            # It will take a few moments, no need to keep spawning shells as fast as the computer can
-            time.sleep(1)
-            if ((time.time() - timeout_start) > self.usb_device_present_timeout):
-                raise RuntimeError("Could not find device %s in %f seconds" % (RT_DFU_DEVICEID, self.usb_device_present_timeout))
+        if not self.wait_for_usb_device(RT_DFU_DEVICEID, self.usb_device_present_timeout):
+            raise RuntimeError("Could not find device %s in %f seconds" % (RT_DFU_DEVICEID, self.usb_device_present_timeout))
         return True
 
     def get_serialport_tty(self, devid):
@@ -211,6 +207,7 @@ class rt_testcase(object):
 
     def get_serialport(self):
         """Shorthand for rebooting the STM32 and cycling USB"""
+        # See if we got lucky
         if self.usb_device_present(RT_SERIAL_DEVICEID):
             return self.get_serialport_tty(RT_SERIAL_DEVICEID)
         # Try again with USB & module enabled (TODO: wire a sense pin so we can know if USB has power or not)
@@ -218,26 +215,18 @@ class rt_testcase(object):
         if self.hp6632b.measure_voltage() < 3700: 
             self.set_power(self.default_voltage, self.default_current) # Just in case something had readjusted the values
         self.enable_usb(True)
-        timeout_start = time.time()
-        while not self.usb_device_present(RT_SERIAL_DEVICEID):
-            # It will take a few moments, no need to keep spawning shells as fast as the computer can
-            time.sleep(1)
-            if ((time.time() - timeout_start) > 2.0):
-                break
+        if self.wait_for_usb_device(RT_SERIAL_DEVICEID, 2):
+            return self.get_serialport_tty(RT_SERIAL_DEVICEID)
         # Still nothing, cycle USB, reset the board
         self.enable_usb(False)
-        self.set_power(4100, 50) # Just in case something had readjusted the values
+        self.set_power(self.default_voltage, self.default_current) # Just in case something had readjusted the values
         self.reset_stm32()
         # Give the controller time to wake up
         time.sleep(0.100)
         self.enable_usb(True)
         # Make sure the serialport actually shows up on device tree
-        timeout_start = time.time()
-        while not self.usb_device_present(RT_SERIAL_DEVICEID):
-            # It will take a few moments, no need to keep spawning shells as fast as the computer can
-            time.sleep(1)
-            if ((time.time() - timeout_start) > self.usb_device_present_timeout):
-                raise RuntimeError("Could not find device %s in %f seconds" % (RT_SERIAL_DEVICEID, self.usb_device_present_timeout))
+        if not self.wait_for_usb_device(RT_SERIAL_DEVICEID, self.usb_device_present_timeout):
+            raise RuntimeError("Could not find device %s in %f seconds" % (RT_SERIAL_DEVICEID, self.usb_device_present_timeout))
         return self.get_serialport_tty(RT_SERIAL_DEVICEID)
 
     def pulse_received(self, alias, usec, sender):
@@ -373,6 +362,16 @@ class rt_testcase(object):
                 return False
             # some other error, re-raise it
             raise e
+
+    def wait_for_usb_device(self, devid, wait):
+        """Wait given time for USB device to appear, returns True if it appeared, False otherwise"""
+        timeout_start = time.time()
+        while not self.usb_device_present(RT_DFU_DEVICEID):
+            if ((time.time() - timeout_start) > wait):
+                return False
+            # It will take a few moments, no need to keep spawning shells as fast as the computer can
+            time.sleep(1)
+        return True
 
     def hook_signals(self):
         """Hooks common UNIX signals to corresponding handlers"""
