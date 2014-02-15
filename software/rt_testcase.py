@@ -145,6 +145,13 @@ class rt_testcase(object):
         """Releases the reset line"""
         dbus_call_cached(self.arduino_path, 'set_alias', 'rt_nrst', True)
 
+    def pulse_boot0(self):
+        """Pushes and releases the bootloader/wakeup button on pa0"""
+        dbus_call_cached(self.arduino_path, 'set_alias', 'rt_boot0', True)
+        time.sleep(0.500)
+        dbus_call_cached(self.arduino_path, 'set_alias', 'rt_boot0', False)
+
+
     def reset_stm32(self, enter_bootloader=False):
         """Boots the STM32 on the board, optionally will enter bootloader mode (though only if the board is actually powered on at this point...)"""
         if enter_bootloader:

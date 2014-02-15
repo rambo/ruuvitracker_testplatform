@@ -4,6 +4,7 @@ import os,sys
 os.environ['PYTHONINSPECT'] = '1'
 
 from rt_testcase import rt_testcase
+from dbushelpers.call_cached import call_cached as dbus_call_cached
 import atexit
 
 c = rt_testcase()

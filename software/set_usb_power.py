@@ -11,4 +11,4 @@ from dbushelpers.call_cached import call_cached as dbus_call_cached
 arduino_path = "/fi/hacklab/ardubus/ruuvitracker_tester"
 loop = gobject.MainLoop()
 bus = dbus.SessionBus()
-dbus_call_cached(arduino_path, 'set_alias', 'hp_power', bool(int(sys.argv[1])))
+dbus_call_cached(arduino_path, 'set_alias', 'usb_power', bool(int(sys.argv[1])))
