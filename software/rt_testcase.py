@@ -45,7 +45,7 @@ class rt_testcase(object):
         self._active_pulse_train = False
         self.logger = None
         self.log_handle = None
-        self.voltage_timer = None
+        self.log_timer = None
         self._tick_count = 0 # How many ticks this test has been running, ticks are seconds
         self._tick_limit = -1 # infinite
         self._tick_timer = None # This will be set later
@@ -281,15 +281,26 @@ class rt_testcase(object):
         self.logger.writerow(row)
 
     def log_voltage_et_current(self):
-        """Logs both voltage and current to the logfile"""
+        """Logs both voltage and current to the logfile (each measurement takes about 50ms)"""
         self.log_data(self.hp6632b.measure_voltage(), self.hp6632b.measure_current(), '')
+        return True
+
+    def log_only_current(self):
+        """Logs both only current to the logfile (if you're interested quick current transients you may want to skip logging the voltage as it takes extra 50ms to do)"""
+        self.log_data('', self.hp6632b.measure_current(), '')
         return True
 
     def set_log_voltage_et_current_interval(self, ms):
         """Sets up a interval timer for logging voltage & current (and logs the first line immediately)"""
         self.log_voltage_et_current()
-        self.voltage_timer = gobject.timeout_add(ms, self.log_voltage_et_current)
-        return self.voltage_timer
+        self.log_timer = gobject.timeout_add(ms, self.log_voltage_et_current)
+        return self.log_timer
+
+    def set_log_only_current_interval(self, ms):
+        """Sets up a interval timer for logging voltage & current (and logs the first line immediately)"""
+        self.log_voltage_et_current()
+        self.log_timer = gobject.timeout_add(ms, self.log_only_current)
+        return self.log_timer
 
     def verify_sync(self):
         """Make sure we have at least one sync pulse train"""
