@@ -406,14 +406,14 @@ class rt_testcase(object):
         shutil.copyfile(source, target)
         self._cleanup_files.append(target)
 
-    def copy_testcase_lua(self):
+    def copy_testcase_c(self):
         """Copies the test helpers and the testcase lua script to romfs"""
+        raise NotImplementedError("this is not implemented for chibios yet")
         if not self.testname:
             raise RuntimeError("self.testname is not defined")
-        romfs_path = os.path.realpath(os.path.join(os.path.dirname(os.path.realpath(__file__)), '..', 'romfs' ))
-        testcases_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'testcases' )
-        self.copy_file(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'testhelpers.lua'), os.path.join(romfs_path, 'testhelpers.lua'))
-        self.copy_file(os.path.join(testcases_path, '%s.lua' % self.testname), os.path.join(romfs_path, 'autorun.lua'))
+        chibios_path = None
+        if not chibios_path:
+            raise RuntimeError("chibios_path is empty")
 
     def recompile_and_flash(self):
         """Mainly for manual testing without having to handle the module in the testrig"""
@@ -423,7 +423,7 @@ class rt_testcase(object):
 
     def copy_compile_flash(self):
         """Shorthand for calling copy_testcase_lua() recompile() flash() """
-        self.copy_testcase_lua()
+        self.copy_testcase_c()
         if not self.recompile_and_flash():
             raise RuntimeError("Could not compile/flash")
 
