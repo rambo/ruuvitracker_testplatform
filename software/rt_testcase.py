@@ -54,7 +54,7 @@ class rt_testcase(object):
 
         # Some defaults 
         self.default_voltage = 4100 # millivolts
-        self.default_current = 50 # milliamps
+        self.default_current = 150 # milliamps
         self.default_pan = 10
         self.default_tilt = 62
         # note if you change these in setup() make sure theyre suitable
