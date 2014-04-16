@@ -286,7 +286,10 @@ class rt_testcase(object):
         self.sqlite_log_connection.commit()
 
     def open_logfile_callback(self):
-        """Override this to create your own log tables, commit is called automatically"""
+        """Override this to create your own log tables, commit is called automatically
+
+NOTE: Always use "time TIMESTAMP DATETIME DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW'))" as the timestamp column type declaration to keep compatibility with the default logs
+        """
         pass
 
     def log_sync(self, short_pulse_count, comment=""):
