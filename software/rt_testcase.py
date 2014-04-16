@@ -49,8 +49,8 @@ class rt_testcase(object):
         self.bus.add_signal_receiver(self.pulse_received, dbus_interface = "fi.hacklab.ardubus", signal_name = "alias_change", path=self.arduino_path)
         self.pulse_trains = []
         self._active_pulse_train = False
-        self.logger = None
-        self.log_handle = None
+        self.sqlite_log_cursor = None
+        self.sqlite_log_connection = None
         self.log_timers = {}
         self._tick_count = 0 # How many ticks this test has been running, ticks are seconds
         self._tick_limit = -1 # infinite
@@ -275,16 +275,15 @@ class rt_testcase(object):
         if not suffix:
             suffix = os.path.basename(__file__)
         filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'logs', "%s_%s.sqlite" % (time.strftime("%Y-%m-%d_%H%M"), suffix))
-        # Open buffered file stream
-        self.log_handle = sqlite3.connect(filename)
-        # Make it CSV
-        self.logger = self.log_handle.cursor()
+        # Open SQLite connections
+        self.sqlite_log_connection = sqlite3.connect(filename, detect_types=sqlite3.PARSE_DECLTYPES)
+        self.sqlite_log_cursor = self.sqlite_log_connection.cursor()
         # And create the default tables
-        self.logger.execute("CREATE TABLE voltage (time TIMESTAMP DATETIME DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')), volts NUMERIC);")
-        self.logger.execute("CREATE TABLE current (time TIMESTAMP DATETIME DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')), amps NUMERIC);")
-        self.logger.execute("CREATE TABLE sync (time TIMESTAMP DATETIME DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')), pulses NUMERIC, comment TEXT);")
+        self.sqlite_log_cursor.execute("CREATE TABLE voltage (time TIMESTAMP DATETIME DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')), volts NUMERIC);")
+        self.sqlite_log_cursor.execute("CREATE TABLE current (time TIMESTAMP DATETIME DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')), amps NUMERIC);")
+        self.sqlite_log_cursor.execute("CREATE TABLE sync (time TIMESTAMP DATETIME DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')), pulses NUMERIC, comment TEXT);")
         self.open_logfile_callback()
-        self.log_handle.commit()
+        self.sqlite_log_connection.commit()
 
     def open_logfile_callback(self):
         """Override this to create your own log tables, commit is called automatically"""
@@ -292,26 +291,26 @@ class rt_testcase(object):
 
     def log_sync(self, short_pulse_count, comment=""):
         """Logs the (short) sync pulse count, optionally with a comment"""
-        if not self.logger:
+        if not self.sqlite_log_cursor:
             self.open_logfile()
-        self.logger.execute("INSERT INTO sync (pulses, comment) values (?,?);", (short_pulse_count, comment) )
-        self.log_handle.commit()
+        self.sqlite_log_cursor.execute("INSERT INTO sync (pulses, comment) values (?,?);", (short_pulse_count, comment) )
+        self.sqlite_log_connection.commit()
         return True
 
     def log_current(self):
         """Logs both only current to the logfile (if you're interested quick current transients you may want to skip logging the voltage as it takes extra 50ms to do)"""
-        if not self.logger:
+        if not self.sqlite_log_cursor:
             self.open_logfile()
-        self.logger.execute("INSERT INTO current (amps) values (?);", (self.hp6632b.measure_current(), ) )
-        self.log_handle.commit()
+        self.sqlite_log_cursor.execute("INSERT INTO current (amps) values (?);", (self.hp6632b.measure_current(), ) )
+        self.sqlite_log_connection.commit()
         return True
 
     def log_voltage(self):
         """Logs both only current to the logfile (if you're interested quick current transients you may want to skip logging the voltage as it takes extra 50ms to do)"""
-        if not self.logger:
+        if not self.sqlite_log_cursor:
             self.open_logfile()
-        self.logger.execute("INSERT INTO voltage (volts) values (?);", (self.hp6632b.measure_voltage(), ) )
-        self.log_handle.commit()
+        self.sqlite_log_cursor.execute("INSERT INTO voltage (volts) values (?);", (self.hp6632b.measure_voltage(), ) )
+        self.sqlite_log_connection.commit()
         return True
 
     def set_log_current_interval(self, ms):
@@ -479,8 +478,8 @@ class rt_testcase(object):
         """Tears down the SCPI connections, closes log handles and quits the mainloop"""
         self.loop.quit()
         self.hp6632b.quit()
-        if self.log_handle:
-            self.log_handle.commit()
-            self.log_handle.close()
+        if self.sqlite_log_connection:
+            self.sqlite_log_connection.commit()
+            self.sqlite_log_connection.close()
         if cleanup:
             self.cleanup()
