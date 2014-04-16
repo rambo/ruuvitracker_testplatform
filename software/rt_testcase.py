@@ -18,7 +18,13 @@ import subprocess
 import timeout_decorator
 import pyudev
 import shutil
-
+import sqlite3
+# Decimal recipe from http://stackoverflow.com/questions/6319409/how-to-convert-python-decimal-to-sqlite-numeric
+import decimal
+# Register the adapter
+sqlite3.register_adapter(decimal.Decimal, lambda d: str(d))
+# Register the converter
+sqlite3.register_converter("NUMERIC", lambda s: decimal.Decimal(s))
 
 RT_DFU_DEVICEID = '0483:df11'
 RT_SERIAL_DEVICEID = '0483:5740'
@@ -45,7 +51,7 @@ class rt_testcase(object):
         self._active_pulse_train = False
         self.logger = None
         self.log_handle = None
-        self.log_timer = None
+        self.log_timers = {}
         self._tick_count = 0 # How many ticks this test has been running, ticks are seconds
         self._tick_limit = -1 # infinite
         self._tick_timer = None # This will be set later
@@ -239,17 +245,17 @@ class rt_testcase(object):
     def pulse_received(self, alias, usec, sender):
         """This callback handles counting of the pulse-trains from pb0"""
         print " *** got %d from '%s' *** " % (usec, alias)
-        if alias != 'rt_pb0': # in we get signals from other aliases...
+        if alias != 'rt_pb0': # in case we get signals from other aliases...
             return
 
-        if (    usec > 4000
+        if (    usec > 2500
             and not self._active_pulse_train):
             # new train
             self.pulse_trains.append([])
             self._active_pulse_train = True
             return
 
-        if (    usec > 4000
+        if (    usec > 2500
             and self._active_pulse_train):
             # end of train
             self._active_pulse_train = False
@@ -260,53 +266,59 @@ class rt_testcase(object):
         self.pulse_trains[-1].append(usec)
 
     def sync_received(self, short_pulse_count):
-        """Callback, you should override this to handle the syncs your tests need (but call this if you want the sync logged)"""
-        self.log_data('','',short_pulse_count, '') # Do not waste time measuring voltage or current
-        pass
+        """Callback, you should override this to handle the syncs your tests need"""
+        self.log_sync(short_pulse_count)
 
-    def open_logfile(self, headers=None):
-        """Opens a timestamped logfile named after self.testname, and writes the first row as headers for CSV data. The file is buffered so you cannot tail it in realtime"""
-        if not headers:
-            headers = [u'Time',u'Voltage', u'Current', u'Syncpulses', u'Comment']
+    def open_logfile(self):
+        """Opens a timestamped logfile named after self.testname and creates the base tables for logging voltage, current and syncpulses"""
         suffix = self.testname
         if not suffix:
             suffix = os.path.basename(__file__)
-        filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'logs', "%s_%s.csv" % (time.strftime("%Y-%m-%d_%H%M"), suffix))
+        filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'logs', "%s_%s.sqlite" % (time.strftime("%Y-%m-%d_%H%M"), suffix))
         # Open buffered file stream
-        self.log_handle = io.open(filename, mode='wb')
+        self.log_handle = sqlite3.connect(filename)
         # Make it CSV
-        self.logger = csv.writer(self.log_handle)
-        # And write the header
-        self.logger.writerow(headers)
+        self.logger = self.log_handle.cursor()
+        # And create the default tables
+        self.logger.execute("CREATE TABLE voltage (time TIMESTAMP DATETIME DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')), volts NUMERIC);")
+        self.logger.execute("CREATE TABLE current (time TIMESTAMP DATETIME DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')), amps NUMERIC);")
+        self.logger.execute("CREATE TABLE sync (time TIMESTAMP DATETIME DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')), pulses NUMERIC, comment TEXT);")
+        self.open_logfile_callback()
+        self.log_handle.commit()
 
-    def log_data(self, *args):
-        """Logs arbitrary data to the logfile, the first column is automatically a timestamp though"""
+    def open_logfile_callback(self):
+        """Override this to create your own log tables, commit is called automatically"""
+        pass
+
+    def log_sync(self, short_pulse_count, comment=""):
+        """Logs the (short) sync pulse count, optionally with a comment"""
         if not self.logger:
             self.open_logfile()
-        row = [ datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f") ] + list(args)
-        self.logger.writerow(row)
-
-    def log_voltage_et_current(self):
-        """Logs both voltage and current to the logfile (each measurement takes about 50ms)"""
-        self.log_data(self.hp6632b.measure_voltage(), self.hp6632b.measure_current(), '')
+        self.logger.execute("INSERT INTO sync (pulses, comment) values (?,?);", (short_pulse_count, comment) )
+        self.log_handle.commit()
         return True
 
-    def log_only_current(self):
+    def log_current(self):
         """Logs both only current to the logfile (if you're interested quick current transients you may want to skip logging the voltage as it takes extra 50ms to do)"""
-        self.log_data('', self.hp6632b.measure_current(), '')
+        if not self.logger:
+            self.open_logfile()
+        self.logger.execute("INSERT INTO current (amps) values (?);", (self.hp6632b.measure_current(), ) )
+        self.log_handle.commit()
         return True
 
-    def set_log_voltage_et_current_interval(self, ms):
-        """Sets up a interval timer for logging voltage & current (and logs the first line immediately)"""
-        self.log_voltage_et_current()
-        self.log_timer = gobject.timeout_add(ms, self.log_voltage_et_current)
-        return self.log_timer
+    def log_voltage(self):
+        """Logs both only current to the logfile (if you're interested quick current transients you may want to skip logging the voltage as it takes extra 50ms to do)"""
+        if not self.logger:
+            self.open_logfile()
+        self.logger.execute("INSERT INTO voltage (volts) values (?);", (self.hp6632b.measure_voltage(), ) )
+        self.log_handle.commit()
+        return True
 
-    def set_log_only_current_interval(self, ms):
+    def set_log_current_interval(self, ms):
         """Sets up a interval timer for logging voltage & current (and logs the first line immediately)"""
-        self.log_voltage_et_current()
-        self.log_timer = gobject.timeout_add(ms, self.log_only_current)
-        return self.log_timer
+        self.log_current()
+        self.log_timers['current'] = gobject.timeout_add(ms, self.log_current)
+        return self.log_timers['current']
 
     def verify_sync(self):
         """Make sure we have at least one sync pulse train"""
@@ -468,6 +480,7 @@ class rt_testcase(object):
         self.loop.quit()
         self.hp6632b.quit()
         if self.log_handle:
+            self.log_handle.commit()
             self.log_handle.close()
         if cleanup:
             self.cleanup()
