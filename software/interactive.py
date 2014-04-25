@@ -12,5 +12,6 @@ atexit.register(c.quit)
 #c.get_serialport()
 
 hp = c.hp6632b
-#c.set_log_voltage_et_current_interval(50) # Requires HW-flow control, but so does the serial interface these days
+#c.set_log_current_interval(50)
+#c.set_log_voltage_interval(500)
 #c.run_eventloop()

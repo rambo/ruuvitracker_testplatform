@@ -317,10 +317,16 @@ NOTE: Always use "time TIMESTAMP DATETIME DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f', 
         return True
 
     def set_log_current_interval(self, ms):
-        """Sets up a interval timer for logging voltage & current (and logs the first line immediately)"""
+        """Sets up a interval timer for logging current (and logs the first line immediately)"""
         self.log_current()
         self.log_timers['current'] = gobject.timeout_add(ms, self.log_current)
         return self.log_timers['current']
+
+    def set_log_voltage_interval(self, ms):
+        """Sets up a interval timer for logging voltage (and logs the first line immediately)"""
+        self.log_voltage()
+        self.log_timers['voltage'] = gobject.timeout_add(ms, self.log_voltage)
+        return self.log_timers['voltage']
 
     def verify_sync(self):
         """Make sure we have at least one sync pulse train"""
