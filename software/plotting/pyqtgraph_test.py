@@ -11,8 +11,8 @@ sqlite3.register_adapter(decimal.Decimal, lambda d: str(d))
 sqlite3.register_converter("NUMERIC", lambda s:  np.float64(s))
 # Register converter&adapter for datetime in the same way
 import datetime
-sqlite3.register_adapter(datetime.datetime, lambda dt: dt.strftime("%Y-%m-%d %H:%M:%S.%f"))
-sqlite3.register_converter("DATETIME", lambda s: datetime.datetime.strptime(s, "%Y-%m-%d %H:%M:%S.%f"))
+sqlite3.register_adapter(datetime.datetime, lambda dt: dt.strftime("%Y-%m-%d %H:%M:%S.%f")) # This actually gives incorrect result since it supposed the padding that is not in sqlite...
+sqlite3.register_converter("DATETIME", lambda s: datetime.datetime.strptime(s, "%Y-%m-%d %H:%M:%S.%f")) # This actually gives incorrect result since it supposed the padding that is not in sqlite...
 # Initialize db connection
 conn = sqlite3.connect(sys.argv[1], detect_types=sqlite3.PARSE_DECLTYPES)
 c = conn.cursor()
