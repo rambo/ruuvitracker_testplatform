@@ -1,3 +1,6 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+import sys
 import sqlite3
 # Decimal recipe from http://stackoverflow.com/questions/6319409/how-to-convert-python-decimal-to-sqlite-numeric
 import decimal
@@ -12,16 +15,16 @@ sqlite3.register_adapter(datetime.datetime, lambda dt: dt.strftime("%Y-%m-%d %H:
 # The type on SQLite is "TIMESTAMP" even if we specified "DATETIME" in table creation...
 sqlite3.register_converter("TIMESTAMP", lambda s: datetime.datetime.strptime(s.ljust(26,"0"), "%Y-%m-%d %H:%M:%S.%f"))
 # Initialize db connection
-conn = sqlite3.connect("plotdata.sqlite", detect_types=sqlite3.PARSE_DECLTYPES)
+conn = sqlite3.connect(sys.argv[1], detect_types=sqlite3.PARSE_DECLTYPES)
 c = conn.cursor()
 
 # Import the graphing stuff
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 
-c.execute("SELECT time,volts FROM voltage")
-voltsdata = np.array(c.fetchall())
-plt.plot(voltsdata[:,0],voltsdata[:,1], '.-')
+#c.execute("SELECT time,volts FROM voltage")
+#voltsdata = np.array(c.fetchall())
+#plt.plot(voltsdata[:,0],voltsdata[:,1], '.-')
 
 c.execute("SELECT time,amps FROM current")
 ampsdata = np.array(c.fetchall())
