@@ -27,8 +27,9 @@ sqlite3.register_adapter(decimal.Decimal, lambda d: str(d))
 sqlite3.register_converter("NUMERIC", lambda s: decimal.Decimal(s))
 # Register converter&adapter for datetime in the same way
 import datetime
-sqlite3.register_adapter(datetime.datetime, lambda dt: dt.strftime("%Y-%m-%d %H:%M:%S.%f")) # This actually gives incorrect result since it supposed the padding that is not in sqlite...
-sqlite3.register_converter("DATETIME", lambda s: datetime.datetime.strptime(s, "%Y-%m-%d %H:%M:%S.%f")) # This actually gives incorrect result since it supposed the padding that is not in sqlite...
+sqlite3.register_adapter(datetime.datetime, lambda dt: dt.strftime("%Y-%m-%d %H:%M:%S.%f")[:23])
+# The type on SQLite is "TIMESTAMP" even if we specified "DATETIME" in table creation...
+sqlite3.register_converter("TIMESTAMP", lambda s: datetime.datetime.strptime(s.ljust(26,"0"), "%Y-%m-%d %H:%M:%S.%f"))
 
 RT_DFU_DEVICEID = '0483:df11'
 RT_SERIAL_DEVICEID = '0483:5740'
