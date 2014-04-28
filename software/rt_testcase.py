@@ -253,14 +253,14 @@ class rt_testcase(object):
         if alias != 'rt_pb0': # in case we get signals from other aliases...
             return
 
-        if (    usec > 2500
+        if (    usec > 2000
             and not self._active_pulse_train):
             # new train
             self.pulse_trains.append([])
             self._active_pulse_train = True
             return
 
-        if (    usec > 2500
+        if (    usec > 2000
             and self._active_pulse_train):
             # end of train
             self._active_pulse_train = False
@@ -349,6 +349,7 @@ NOTE: Always use "time TIMESTAMP DATETIME DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f', 
     @timeout_decorator.timeout(COMPILE_TIMEOUT) # Uses sigalarm to make sure we don't deadlock
     def recompile(self, *args):
         """Runs ruuvi_build.sh, any extra arguments will be passed as args to the script"""
+        raise NotImplementedError("this is not implemented for chibios yet")
         print " *** Compiling ***"
         pi_backup = None
         # This will mess up scons
