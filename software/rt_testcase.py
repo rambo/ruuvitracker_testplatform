@@ -227,7 +227,10 @@ class rt_testcase(object):
         """Shorthand for rebooting the STM32 and cycling USB"""
         # See if we got lucky
         if self.usb_device_present(RT_SERIAL_DEVICEID):
-            return self.get_serialport_tty(RT_SERIAL_DEVICEID)
+            try:
+                return self.get_serialport_tty(RT_SERIAL_DEVICEID)
+            except RuntimeError,e:
+                pass
         # Try again with USB & module enabled (TODO: wire a sense pin so we can know if USB has power or not)
         self.hp6632b.set_output(True)
         if self.hp6632b.measure_voltage() < 3700: 
