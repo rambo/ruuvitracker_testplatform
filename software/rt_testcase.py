@@ -156,10 +156,16 @@ class rt_testcase(object):
         dbus_call_cached(self.arduino_path, 'set_alias', 'rt_nrst', True)
 
     def pulse_boot0(self, wait=0.500):
-        """Pushes and releases the bootloader/wakeup button on pa0"""
+        """Pushes and releases the bootloader button on boot0"""
         dbus_call_cached(self.arduino_path, 'set_alias', 'rt_boot0', True)
         time.sleep(wait)
         dbus_call_cached(self.arduino_path, 'set_alias', 'rt_boot0', False)
+
+    def pulse_pa0(self, wait=0.500):
+        """Pushes and releases the wakeup button on pa0, NOTE: in RevC2 (and earlier) this is same as boot0, which will cause problems in wakeup"""
+        dbus_call_cached(self.arduino_path, 'set_alias', 'rt_pa0', True)
+        time.sleep(wait)
+        dbus_call_cached(self.arduino_path, 'set_alias', 'rt_pa0', False)
 
     def reset_stm32(self, enter_bootloader=False):
         """Boots the STM32 on the board, optionally will enter bootloader mode (though only if the board is actually powered on at this point...)"""
