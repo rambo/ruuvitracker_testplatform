@@ -444,6 +444,7 @@ class rt_testcase(object):
             and self._tick_count >= self._tick_limit):
             print """ *** Tick limit of %d reached, quitting *** """ % self._tick_limit
             self.quit()
+        # TODO: we should adjust the tick timer since if there was system load we might be running late...
         return True
 
     def run_eventloop(self):
