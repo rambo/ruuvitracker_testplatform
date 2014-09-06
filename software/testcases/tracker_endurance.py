@@ -17,10 +17,11 @@ class endurance(rt_testcase):
         self.last_keepalive = None
 
     def setup(self):
-        self.set_power(4100,1500)
+        self.hp6632b.display_on(False) # Conserve display
+        self.set_power(4100,2000)
         self.set_log_only_current_interval(100)
         # Start first with 15s timeout (when we receive the pulses we'll reset this timer)
-        self.keepalive_timer = gobject.timeout_add(15000, self.verify_keepalive)
+        self.keepalive_timer = gobject.timeout_add(1500, self.verify_keepalive) # We ought to get the first one immediately
 
     def verify_keepalive(self):
         from exceptions import RuntimeError
