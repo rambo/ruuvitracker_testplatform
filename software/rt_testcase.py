@@ -312,7 +312,7 @@ NOTE: Always use "time TIMESTAMP DATETIME DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f', 
         """Logs both only current to the logfile (if you're interested quick current transients you may want to skip logging the voltage as it takes extra 50ms to do)"""
         if not self.sqlite_log_cursor:
             self.open_logfile()
-        self.sqlite_log_cursor.execute("INSERT INTO current (amps) values (?);", (self.hp6632b.measure_current(), ) )
+        self.sqlite_log_cursor.execute("INSERT INTO current (amps) values (?);", (self.hp6632b.measure_current_autorange(), ) )
         self.sqlite_log_connection.commit()
         return True
 
